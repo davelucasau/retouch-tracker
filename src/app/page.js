@@ -17,14 +17,11 @@ export default function Home() {
   const [creatives, setCreatives] = useState([]);
   const [activeCreative, setActiveCreative] = useState("");
 
-  const [creativeData, setCreativeData] = useState({}); // 🔥 key fix
+  const [creativeData, setCreativeData] = useState({});
 
   const [fileInput, setFileInput] = useState("");
   const [fileNotes, setFileNotes] = useState({});
 
-  const [collapsed, setCollapsed] = useState({});
-
-  // LOAD / SAVE
   useEffect(() => {
     const saved = localStorage.getItem("retouch-data");
     if (saved) setData(JSON.parse(saved));
@@ -34,16 +31,12 @@ export default function Home() {
     localStorage.setItem("retouch-data", JSON.stringify(data));
   }, [data]);
 
-  const shoots = [...new Set(data.map(d => d.shoot).filter(Boolean))];
+  const shoots = [...new Set(data.map(d => d.shoot))];
 
   const getProgress = (shoot) => {
     const items = data.filter(d => d.shoot === shoot);
     const complete = items.filter(i => i.status === "completed").length;
-    return {
-      percent: items.length ? Math.round((complete / items.length) * 100) : 0,
-      total: items.length,
-      complete
-    };
+    return Math.round((complete / (items.length || 1)) * 100);
   };
 
   const cycleStatus = (id) => {
@@ -61,11 +54,10 @@ export default function Home() {
     }));
   };
 
-  const getStatusStyle = (status) => {
-    if (status === "pending") return "bg-yellow-500/20 border-yellow-400/40";
-    if (status === "in progress") return "bg-green-500/20 border-green-400/40";
-    if (status === "completed") return "bg-blue-500/20 border-blue-400/40";
-    return "bg-white/5";
+  const statusStyle = (status) => {
+    if (status === "pending") return "bg-yellow-500/20 border-yellow-400";
+    if (status === "in progress") return "bg-green-500/20 border-green-400";
+    if (status === "completed") return "bg-blue-500/20 border-blue-400";
   };
 
   // IMPORT LOGIC
@@ -73,10 +65,7 @@ export default function Home() {
     if (!newCreative) return;
     if (!creatives.includes(newCreative)) {
       setCreatives([...creatives, newCreative]);
-      setCreativeData({
-        ...creativeData,
-        [newCreative]: []
-      });
+      setCreativeData({ ...creativeData, [newCreative]: [] });
     }
     setNewCreative("");
   };
@@ -118,20 +107,16 @@ export default function Home() {
     setFileNotes({});
   };
 
-  const addShootToApp = () => {
-    const allItems = Object.values(creativeData).flat();
+  const addShoot = () => {
+    const all = Object.values(creativeData).flat();
+    if (!newShoot || all.length === 0) return;
 
-    if (!newShoot || allItems.length === 0) return;
+    setData([...data, ...all]);
 
-    setData([...data, ...allItems]);
-
-    // RESET
     setNewShoot("");
     setCreatives([]);
     setActiveCreative("");
     setCreativeData({});
-    setFileInput("");
-    setFileNotes({});
   };
 
   const deleteShoot = (shoot) => {
@@ -144,100 +129,48 @@ export default function Home() {
     <div className="min-h-screen bg-[#0f172a] text-white">
 
       {/* HEADER */}
-      <div className="bg-gradient-to-r from-orange-500 to-amber-400 text-black p-5 flex justify-between">
-        <div className="flex gap-6">
-          {["workspace","import","shoots"].map(t => (
-            <button key={t} onClick={()=>setTab(t)}>
-              {t}
-            </button>
+      <div className="flex justify-between p-4 bg-gradient-to-r from-orange-500 to-amber-400 text-black">
+        <div className="flex gap-4">
+          {["workspace","import","shoots"].map(t=>(
+            <button key={t} onClick={()=>setTab(t)}>{t}</button>
           ))}
         </div>
 
         {tab==="workspace" && (
-          <button
-            onClick={()=>setShowShootModal(true)}
-            className="bg-black/20 px-4 py-2 rounded"
-          >
+          <button onClick={()=>setShowShootModal(true)}>
             Select Shoot
           </button>
         )}
       </div>
 
-      <div className="p-6 space-y-6">
+      <div className="p-6">
 
         {/* WORKSPACE */}
-        {tab==="workspace" && (
+        {tab==="workspace" && activeShoot && (
           <>
-            {activeShoot && (
-              <div className="flex items-center gap-4">
-
-                {(() => {
-                  const p = getProgress(activeShoot);
-                  return (
-                    <div className="relative w-14 h-14">
-                      <div
-                        className="absolute inset-0 rounded-full"
-                        style={{
-                          background: `conic-gradient(#4ade80 ${p.percent}%, #333 ${p.percent}%)`
-                        }}
-                      />
-                      <div className="absolute inset-2 bg-[#0f172a] rounded-full flex items-center justify-center text-xs">
-                        {p.percent}%
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                <div>{activeShoot}</div>
-              </div>
-            )}
+            <div className="mb-4">
+              {activeShoot} ({getProgress(activeShoot)}%)
+            </div>
 
             {[...new Set(
               data.filter(d=>d.shoot===activeShoot).map(d=>d.creative)
-            )].map((creative,index)=>{
+            )].map(c=>{
 
-              const items = data.filter(d=>d.shoot===activeShoot && d.creative===creative);
-              const isCollapsed = collapsed[creative] ?? (index!==0);
+              const items = data.filter(d=>d.shoot===activeShoot && d.creative===c);
 
               return (
-                <div key={creative}>
+                <div key={c} className="mb-4">
+                  <div>{c}</div>
 
-                  <div
-                    onClick={()=>setCollapsed({...collapsed,[creative]:!isCollapsed})}
-                    className="bg-white/5 p-3 rounded cursor-pointer"
-                  >
-                    {creative} ({items.length})
-                  </div>
-
-                  {!isCollapsed && (
-                    <div className="mt-3 space-y-3">
-
-                      {items.map(item=>(
-                        <div
-                          key={item.id}
-                          onClick={()=>cycleStatus(item.id)}
-                          className={`p-4 rounded border ${getStatusStyle(item.status)}`}
-                        >
-                          <div className="flex justify-between">
-
-                            <div>
-                              <div>{item.file}</div>
-                              {item.notes && (
-                                <div className="text-sm text-gray-400">
-                                  {item.notes}
-                                </div>
-                              )}
-                            </div>
-
-                            <div>{item.status}</div>
-
-                          </div>
-                        </div>
-                      ))}
-
+                  {items.map(i=>(
+                    <div
+                      key={i.id}
+                      onClick={()=>cycleStatus(i.id)}
+                      className={`p-3 border rounded ${statusStyle(i.status)}`}
+                    >
+                      {i.file} — {i.notes}
                     </div>
-                  )}
-
+                  ))}
                 </div>
               );
             })}
@@ -252,62 +185,57 @@ export default function Home() {
               placeholder="Shoot title"
               value={newShoot}
               onChange={e=>setNewShoot(e.target.value)}
-              className="w-full p-3 bg-black/20 rounded"
+              className="w-full p-2 bg-black/20"
             />
 
             <div className="flex gap-2">
               <input
-                placeholder="Add creative"
+                placeholder="Creative"
                 value={newCreative}
                 onChange={e=>setNewCreative(e.target.value)}
-                className="flex-1 p-3 bg-black/20 rounded"
+                className="flex-1 p-2 bg-black/20"
               />
               <button onClick={addCreative}>Add</button>
             </div>
 
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2">
               {creatives.map(c=>(
-                <div
-                  key={c}
-                  onClick={()=>switchCreative(c)}
-                  className={`px-3 py-1 rounded ${
-                    activeCreative===c ? "bg-blue-500" : "bg-white/10"
-                  }`}
-                >
+                <div key={c} onClick={()=>switchCreative(c)}>
                   {c}
                 </div>
               ))}
             </div>
 
-            <textarea
-              placeholder="Paste filenames"
-              value={fileInput}
-              onChange={e=>setFileInput(e.target.value)}
-              className="w-full p-3 bg-black/20 rounded h-32"
-            />
+            {activeCreative && (
+              <>
+                <div>{activeCreative}</div>
 
-            {fileInput.split("\n").map(file=>(
-              file.trim() && (
-                <input
-                  key={file}
-                  placeholder={`Note for ${file}`}
-                  value={fileNotes[file] || ""}
-                  onChange={e=>{
-                    setFileNotes({...fileNotes,[file]:e.target.value})
-                  }}
-                  className="w-full p-2 bg-black/20 rounded"
+                <textarea
+                  placeholder="Paste filenames (one per line)"
+                  value={fileInput}
+                  onChange={e=>setFileInput(e.target.value)}
                 />
-              )
-            ))}
 
-            <button onClick={addFilesToCreative}>
-              Add Files to Creative
-            </button>
+                {fileInput.split("\n").map(file=>(
+                  file.trim() && (
+                    <input
+                      key={file}
+                      placeholder={`Note for ${file}`}
+                      value={fileNotes[file] || ""}
+                      onChange={e=>{
+                        setFileNotes({...fileNotes,[file]:e.target.value})
+                      }}
+                    />
+                  )
+                ))}
 
-            <button
-              onClick={addShootToApp}
-              className="bg-orange-400 text-black p-3 rounded"
-            >
+                <button onClick={addFilesToCreative}>
+                  Add Files
+                </button>
+              </>
+            )}
+
+            <button onClick={addShoot}>
               Add Shoot
             </button>
 
@@ -316,87 +244,16 @@ export default function Home() {
 
         {/* SHOOTS */}
         {tab==="shoots" && (
-          <div className="space-y-3">
-            {shoots.map(shoot=>(
-              <div
-                key={shoot}
-                onClick={()=>{setSelectedShoot(shoot); setShowShootDetail(true)}}
-                className="p-4 bg-blue-900/40 rounded cursor-pointer"
-              >
-                {shoot}
+          <div>
+            {shoots.map(s=>(
+              <div key={s} onClick={()=>{setSelectedShoot(s);setShowShootDetail(true)}}>
+                {s}
               </div>
             ))}
           </div>
         )}
 
       </div>
-
-      {/* SHOOT MODAL */}
-      {showShootDetail && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center">
-
-          <div className="bg-[#1e293b] p-6 rounded-xl w-[500px]">
-
-            <div className="flex justify-between mb-4">
-              <div>{selectedShoot}</div>
-              <button onClick={()=>setShowShootDetail(false)}>✕</button>
-            </div>
-
-            <div className="mb-3">
-              Progress: {getProgress(selectedShoot).percent}%
-            </div>
-
-            {[...new Set(
-              data.filter(d=>d.shoot===selectedShoot).map(d=>d.creative)
-            )].map(creative=>{
-
-              const items = data.filter(d=>d.shoot===selectedShoot && d.creative===creative);
-
-              return (
-                <div key={creative} className="mb-4">
-
-                  <div className="text-blue-300 mb-2">{creative}</div>
-
-                  {items.map(item=>(
-                    <div key={item.id} className="text-sm">
-                      {item.file} — {item.notes}
-                    </div>
-                  ))}
-
-                </div>
-              );
-            })}
-
-            <button
-              onClick={()=>deleteShoot(selectedShoot)}
-              className="text-red-400 mt-4"
-            >
-              Delete Shoot
-            </button>
-
-          </div>
-
-        </div>
-      )}
-
-      {/* SELECT SHOOT */}
-      {showShootModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center">
-          <div className="bg-[#1e293b] p-4 rounded">
-
-            {shoots.map(s=>(
-              <div key={s}
-                onClick={()=>{setActiveShoot(s); setShowShootModal(false)}}
-                className="p-2 cursor-pointer"
-              >
-                {s}
-              </div>
-            ))}
-
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }
