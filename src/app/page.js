@@ -22,28 +22,17 @@ export default function Home() {
 
   const [collapsed, setCollapsed] = useState({});
 
-  // LOAD
+  // LOAD / SAVE
   useEffect(() => {
     const saved = localStorage.getItem("retouch-data");
     if (saved) setData(JSON.parse(saved));
   }, []);
 
-  // SAVE
   useEffect(() => {
     localStorage.setItem("retouch-data", JSON.stringify(data));
   }, [data]);
 
   const shoots = [...new Set(data.map(d => d.shoot).filter(Boolean))];
-
-  const getProgress = (shoot) => {
-    const items = data.filter(d => d.shoot === shoot);
-    const complete = items.filter(i => i.status === "completed").length;
-    return {
-      percent: items.length ? Math.round((complete / items.length) * 100) : 0,
-      total: items.length,
-      complete
-    };
-  };
 
   const cycleStatus = (id) => {
     setData(data.map(d => {
@@ -58,6 +47,13 @@ export default function Home() {
 
       return { ...d, status: next };
     }));
+  };
+
+  const getStatusStyle = (status) => {
+    if (status === "pending") return "bg-yellow-500/20 border-yellow-400/40";
+    if (status === "in progress") return "bg-green-500/20 border-green-400/40";
+    if (status === "completed") return "bg-blue-500/20 border-blue-400/40";
+    return "bg-white/5";
   };
 
   // IMPORT
@@ -93,7 +89,6 @@ export default function Home() {
 
     setData([...data, ...stagedItems]);
 
-    // reset
     setNewShoot("");
     setCreatives([]);
     setActiveCreative("");
@@ -125,79 +120,64 @@ export default function Home() {
         {/* WORKSPACE */}
         {tab==="workspace" && (
           <>
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between">
               <div>{activeShoot || "No shoot selected"}</div>
-              <button onClick={()=>setShowShootModal(true)}>
-                Select Shoot
-              </button>
+              <button onClick={()=>setShowShootModal(true)}>Select Shoot</button>
             </div>
 
-            {!activeShoot && <div>Select a shoot to begin</div>}
-
             {activeShoot && (
-              <>
-                {[...new Set(
-                  data
-                    .filter(d => d.shoot === activeShoot)
-                    .map(d => d.creative || "Unassigned")
-                )].map((creative, index) => {
+              [...new Set(
+                data.filter(d=>d.shoot===activeShoot).map(d=>d.creative)
+              )].map((creative,index)=>{
 
-                  const items = data.filter(d =>
-                    d.shoot === activeShoot &&
-                    (d.creative || "Unassigned") === creative
-                  );
+                const items = data.filter(d =>
+                  d.shoot===activeShoot && d.creative===creative
+                );
 
-                  const isCollapsed =
-                    collapsed[creative] ?? (index !== 0);
+                const isCollapsed = collapsed[creative] ?? (index!==0);
 
-                  return (
-                    <div key={creative}>
+                return (
+                  <div key={creative}>
 
-                      <div
-                        onClick={() =>
-                          setCollapsed(prev => ({
-                            ...prev,
-                            [creative]: !isCollapsed
-                          }))
-                        }
-                        className="bg-white/5 p-3 rounded cursor-pointer"
-                      >
-                        {creative} ({items.length})
-                      </div>
-
-                      {!isCollapsed && (
-                        <div className="space-y-3 mt-3">
-
-                          {items.map(item => (
-                            <div
-                              key={item.id}
-                              onClick={()=>cycleStatus(item.id)}
-                              className="p-4 bg-blue-900/40 border border-white/30 rounded"
-                            >
-                              <div className="flex justify-between">
-
-                                <div>
-                                  <div>{item.file}</div>
-                                  {item.notes && (
-                                    <div className="text-sm text-gray-400">
-                                      {item.notes}
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div>{item.status}</div>
-
-                              </div>
-                            </div>
-                          ))}
-
-                        </div>
-                      )}
-
+                    <div
+                      onClick={()=>setCollapsed({...collapsed,[creative]:!isCollapsed})}
+                      className="bg-white/5 p-3 rounded cursor-pointer"
+                    >
+                      {creative} ({items.length})
                     </div>
-                  );
-                })}
-              </>
+
+                    {!isCollapsed && (
+                      <div className="mt-3 space-y-3">
+
+                        {items.map(item=>(
+                          <div
+                            key={item.id}
+                            onClick={()=>cycleStatus(item.id)}
+                            className={`p-4 rounded border ${getStatusStyle(item.status)}`}
+                          >
+                            <div className="flex justify-between">
+
+                              <div>
+                                <div>{item.file}</div>
+                                {item.notes && (
+                                  <div className="text-sm text-gray-400">
+                                    {item.notes}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="capitalize">{item.status}</div>
+
+                            </div>
+                          </div>
+                        ))}
+
+                      </div>
+                    )}
+
+                  </div>
+                );
+              })
             )}
           </>
         )}
@@ -210,7 +190,7 @@ export default function Home() {
               placeholder="Shoot title"
               value={newShoot}
               onChange={e=>setNewShoot(e.target.value)}
-              className="w-full p-2 bg-black/20 rounded"
+              className="w-full p-3 bg-black/20 rounded"
             />
 
             <div className="flex gap-2">
@@ -218,7 +198,7 @@ export default function Home() {
                 placeholder="Add creative"
                 value={newCreative}
                 onChange={e=>setNewCreative(e.target.value)}
-                className="flex-1 p-2 bg-black/20 rounded"
+                className="flex-1 p-3 bg-black/20 rounded"
               />
               <button onClick={addCreative}>Add</button>
             </div>
@@ -241,7 +221,7 @@ export default function Home() {
               placeholder="Paste filenames"
               value={fileInput}
               onChange={e=>setFileInput(e.target.value)}
-              className="w-full p-2 bg-black/20 rounded h-32"
+              className="w-full p-3 bg-black/20 rounded h-32"
             />
 
             {fileInput.split("\n").map(file=>(
@@ -258,10 +238,13 @@ export default function Home() {
             ))}
 
             <button onClick={addFilesToCreative}>
-              Add Files to Creative
+              Add Files to Selected Creative
             </button>
 
-            <button onClick={addShootToApp}>
+            <button
+              onClick={addShootToApp}
+              className="bg-orange-400 text-black p-3 rounded"
+            >
               Add Shoot
             </button>
 
@@ -309,18 +292,35 @@ export default function Home() {
       {showShootDetail && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center">
 
-          <div className="bg-[#1e293b] p-6 rounded w-[500px]">
+          <div className="bg-[#1e293b] p-6 rounded-xl w-[500px] max-h-[80vh] overflow-y-auto">
 
             <div className="flex justify-between mb-4">
-              <div>{selectedShoot}</div>
+              <div className="text-lg font-semibold">{selectedShoot}</div>
               <button onClick={()=>setShowShootDetail(false)}>✕</button>
             </div>
 
-            {data
-              .filter(d=>d.shoot===selectedShoot)
-              .map(item=>(
-                <div key={item.id}>{item.file}</div>
-              ))}
+            {[...new Set(
+              data.filter(d=>d.shoot===selectedShoot).map(d=>d.creative)
+            )].map(creative=>{
+
+              const items = data.filter(d=>d.shoot===selectedShoot && d.creative===creative);
+
+              return (
+                <div key={creative} className="mb-4">
+
+                  <div className="text-blue-300 mb-2">
+                    {creative}
+                  </div>
+
+                  {items.map(item=>(
+                    <div key={item.id} className="text-sm mb-1">
+                      {item.file}
+                    </div>
+                  ))}
+
+                </div>
+              );
+            })}
 
             <button
               onClick={()=>deleteShoot(selectedShoot)}
