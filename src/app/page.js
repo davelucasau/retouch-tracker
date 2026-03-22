@@ -16,9 +16,11 @@ export default function Home() {
   const [newCreative, setNewCreative] = useState("");
   const [creatives, setCreatives] = useState([]);
   const [activeCreative, setActiveCreative] = useState("");
+
+  const [creativeData, setCreativeData] = useState({}); // 🔥 key fix
+
   const [fileInput, setFileInput] = useState("");
   const [fileNotes, setFileNotes] = useState({});
-  const [stagedItems, setStagedItems] = useState([]);
 
   const [collapsed, setCollapsed] = useState({});
 
@@ -33,6 +35,16 @@ export default function Home() {
   }, [data]);
 
   const shoots = [...new Set(data.map(d => d.shoot).filter(Boolean))];
+
+  const getProgress = (shoot) => {
+    const items = data.filter(d => d.shoot === shoot);
+    const complete = items.filter(i => i.status === "completed").length;
+    return {
+      percent: items.length ? Math.round((complete / items.length) * 100) : 0,
+      total: items.length,
+      complete
+    };
+  };
 
   const cycleStatus = (id) => {
     setData(data.map(d => {
@@ -56,13 +68,31 @@ export default function Home() {
     return "bg-white/5";
   };
 
-  // IMPORT
+  // IMPORT LOGIC
   const addCreative = () => {
     if (!newCreative) return;
     if (!creatives.includes(newCreative)) {
       setCreatives([...creatives, newCreative]);
+      setCreativeData({
+        ...creativeData,
+        [newCreative]: []
+      });
     }
     setNewCreative("");
+  };
+
+  const switchCreative = (c) => {
+    setActiveCreative(c);
+
+    const existing = creativeData[c] || [];
+
+    setFileInput(existing.map(i => i.file).join("\n"));
+
+    const notesObj = {};
+    existing.forEach(i => {
+      notesObj[i.file] = i.notes;
+    });
+    setFileNotes(notesObj);
   };
 
   const addFilesToCreative = () => {
@@ -70,7 +100,7 @@ export default function Home() {
 
     const files = fileInput.split("\n").filter(f => f.trim());
 
-    const newItems = files.map(file => ({
+    const items = files.map(file => ({
       id: Date.now() + Math.random(),
       shoot: newShoot,
       creative: activeCreative,
@@ -79,20 +109,27 @@ export default function Home() {
       status: "pending"
     }));
 
-    setStagedItems([...stagedItems, ...newItems]);
+    setCreativeData({
+      ...creativeData,
+      [activeCreative]: items
+    });
+
     setFileInput("");
     setFileNotes({});
   };
 
   const addShootToApp = () => {
-    if (!newShoot || stagedItems.length === 0) return;
+    const allItems = Object.values(creativeData).flat();
 
-    setData([...data, ...stagedItems]);
+    if (!newShoot || allItems.length === 0) return;
 
+    setData([...data, ...allItems]);
+
+    // RESET
     setNewShoot("");
     setCreatives([]);
     setActiveCreative("");
-    setStagedItems([]);
+    setCreativeData({});
     setFileInput("");
     setFileNotes({});
   };
@@ -107,12 +144,23 @@ export default function Home() {
     <div className="min-h-screen bg-[#0f172a] text-white">
 
       {/* HEADER */}
-      <div className="bg-gradient-to-r from-orange-500 to-amber-400 text-black p-5 flex gap-6">
-        {["workspace","import","shoots"].map(t => (
-          <button key={t} onClick={()=>setTab(t)}>
-            {t}
+      <div className="bg-gradient-to-r from-orange-500 to-amber-400 text-black p-5 flex justify-between">
+        <div className="flex gap-6">
+          {["workspace","import","shoots"].map(t => (
+            <button key={t} onClick={()=>setTab(t)}>
+              {t}
+            </button>
+          ))}
+        </div>
+
+        {tab==="workspace" && (
+          <button
+            onClick={()=>setShowShootModal(true)}
+            className="bg-black/20 px-4 py-2 rounded"
+          >
+            Select Shoot
           </button>
-        ))}
+        )}
       </div>
 
       <div className="p-6 space-y-6">
@@ -120,65 +168,79 @@ export default function Home() {
         {/* WORKSPACE */}
         {tab==="workspace" && (
           <>
-            <div className="flex justify-between">
-              <div>{activeShoot || "No shoot selected"}</div>
-              <button onClick={()=>setShowShootModal(true)}>Select Shoot</button>
-            </div>
-
             {activeShoot && (
-              [...new Set(
-                data.filter(d=>d.shoot===activeShoot).map(d=>d.creative)
-              )].map((creative,index)=>{
+              <div className="flex items-center gap-4">
 
-                const items = data.filter(d =>
-                  d.shoot===activeShoot && d.creative===creative
-                );
-
-                const isCollapsed = collapsed[creative] ?? (index!==0);
-
-                return (
-                  <div key={creative}>
-
-                    <div
-                      onClick={()=>setCollapsed({...collapsed,[creative]:!isCollapsed})}
-                      className="bg-white/5 p-3 rounded cursor-pointer"
-                    >
-                      {creative} ({items.length})
-                    </div>
-
-                    {!isCollapsed && (
-                      <div className="mt-3 space-y-3">
-
-                        {items.map(item=>(
-                          <div
-                            key={item.id}
-                            onClick={()=>cycleStatus(item.id)}
-                            className={`p-4 rounded border ${getStatusStyle(item.status)}`}
-                          >
-                            <div className="flex justify-between">
-
-                              <div>
-                                <div>{item.file}</div>
-                                {item.notes && (
-                                  <div className="text-sm text-gray-400">
-                                    {item.notes}
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className="capitalize">{item.status}</div>
-
-                            </div>
-                          </div>
-                        ))}
-
+                {(() => {
+                  const p = getProgress(activeShoot);
+                  return (
+                    <div className="relative w-14 h-14">
+                      <div
+                        className="absolute inset-0 rounded-full"
+                        style={{
+                          background: `conic-gradient(#4ade80 ${p.percent}%, #333 ${p.percent}%)`
+                        }}
+                      />
+                      <div className="absolute inset-2 bg-[#0f172a] rounded-full flex items-center justify-center text-xs">
+                        {p.percent}%
                       </div>
-                    )}
+                    </div>
+                  );
+                })()}
 
-                  </div>
-                );
-              })
+                <div>{activeShoot}</div>
+              </div>
             )}
+
+            {[...new Set(
+              data.filter(d=>d.shoot===activeShoot).map(d=>d.creative)
+            )].map((creative,index)=>{
+
+              const items = data.filter(d=>d.shoot===activeShoot && d.creative===creative);
+              const isCollapsed = collapsed[creative] ?? (index!==0);
+
+              return (
+                <div key={creative}>
+
+                  <div
+                    onClick={()=>setCollapsed({...collapsed,[creative]:!isCollapsed})}
+                    className="bg-white/5 p-3 rounded cursor-pointer"
+                  >
+                    {creative} ({items.length})
+                  </div>
+
+                  {!isCollapsed && (
+                    <div className="mt-3 space-y-3">
+
+                      {items.map(item=>(
+                        <div
+                          key={item.id}
+                          onClick={()=>cycleStatus(item.id)}
+                          className={`p-4 rounded border ${getStatusStyle(item.status)}`}
+                        >
+                          <div className="flex justify-between">
+
+                            <div>
+                              <div>{item.file}</div>
+                              {item.notes && (
+                                <div className="text-sm text-gray-400">
+                                  {item.notes}
+                                </div>
+                              )}
+                            </div>
+
+                            <div>{item.status}</div>
+
+                          </div>
+                        </div>
+                      ))}
+
+                    </div>
+                  )}
+
+                </div>
+              );
+            })}
           </>
         )}
 
@@ -207,7 +269,7 @@ export default function Home() {
               {creatives.map(c=>(
                 <div
                   key={c}
-                  onClick={()=>setActiveCreative(c)}
+                  onClick={()=>switchCreative(c)}
                   className={`px-3 py-1 rounded ${
                     activeCreative===c ? "bg-blue-500" : "bg-white/10"
                   }`}
@@ -229,6 +291,7 @@ export default function Home() {
                 <input
                   key={file}
                   placeholder={`Note for ${file}`}
+                  value={fileNotes[file] || ""}
                   onChange={e=>{
                     setFileNotes({...fileNotes,[file]:e.target.value})
                   }}
@@ -238,7 +301,7 @@ export default function Home() {
             ))}
 
             <button onClick={addFilesToCreative}>
-              Add Files to Selected Creative
+              Add Files to Creative
             </button>
 
             <button
@@ -254,7 +317,6 @@ export default function Home() {
         {/* SHOOTS */}
         {tab==="shoots" && (
           <div className="space-y-3">
-
             {shoots.map(shoot=>(
               <div
                 key={shoot}
@@ -264,39 +326,24 @@ export default function Home() {
                 {shoot}
               </div>
             ))}
-
           </div>
         )}
 
       </div>
 
-      {/* SELECT SHOOT MODAL */}
-      {showShootModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center">
-          <div className="bg-[#1e293b] p-4 rounded">
-
-            {shoots.map(s=>(
-              <div key={s}
-                onClick={()=>{setActiveShoot(s); setShowShootModal(false)}}
-                className="p-2 cursor-pointer"
-              >
-                {s}
-              </div>
-            ))}
-
-          </div>
-        </div>
-      )}
-
-      {/* SHOOT DETAIL MODAL */}
+      {/* SHOOT MODAL */}
       {showShootDetail && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center">
 
-          <div className="bg-[#1e293b] p-6 rounded-xl w-[500px] max-h-[80vh] overflow-y-auto">
+          <div className="bg-[#1e293b] p-6 rounded-xl w-[500px]">
 
             <div className="flex justify-between mb-4">
-              <div className="text-lg font-semibold">{selectedShoot}</div>
+              <div>{selectedShoot}</div>
               <button onClick={()=>setShowShootDetail(false)}>✕</button>
+            </div>
+
+            <div className="mb-3">
+              Progress: {getProgress(selectedShoot).percent}%
             </div>
 
             {[...new Set(
@@ -308,13 +355,11 @@ export default function Home() {
               return (
                 <div key={creative} className="mb-4">
 
-                  <div className="text-blue-300 mb-2">
-                    {creative}
-                  </div>
+                  <div className="text-blue-300 mb-2">{creative}</div>
 
                   {items.map(item=>(
-                    <div key={item.id} className="text-sm mb-1">
-                      {item.file}
+                    <div key={item.id} className="text-sm">
+                      {item.file} — {item.notes}
                     </div>
                   ))}
 
@@ -331,6 +376,24 @@ export default function Home() {
 
           </div>
 
+        </div>
+      )}
+
+      {/* SELECT SHOOT */}
+      {showShootModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center">
+          <div className="bg-[#1e293b] p-4 rounded">
+
+            {shoots.map(s=>(
+              <div key={s}
+                onClick={()=>{setActiveShoot(s); setShowShootModal(false)}}
+                className="p-2 cursor-pointer"
+              >
+                {s}
+              </div>
+            ))}
+
+          </div>
         </div>
       )}
 
